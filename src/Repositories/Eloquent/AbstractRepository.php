@@ -25,7 +25,7 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
     public function __construct(Request $request)
     {
         $this->entity = $this->resolveEntity();
-        $this->request = $request;
+        $this->request = $request; // reading request here allows many options.
     }
 
     /**
@@ -175,7 +175,7 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
             // We can bypass and continue...
         } elseif ($this->request->input('limit') > 0){
             // $per_page=null, but we could try find "limit" form request
-            $per_page =  ? $this->request->input('limit') : 0;
+            $per_page = $this->request->input('limit');
         } else {
             return $records;
         }
