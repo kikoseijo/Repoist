@@ -3,9 +3,11 @@
 namespace Kurt\Repoist\Repositories\Eloquent;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Kurt\Repoist\Exceptions\NoEntityDefined;
 use Kurt\Repoist\Repositories\Contracts\RepositoryInterface;
 use Kurt\Repoist\Repositories\Criteria\CriteriaInterface;
+use Illuminate\Http\Request;
 
 abstract class AbstractRepository implements RepositoryInterface, CriteriaInterface
 {
@@ -14,13 +16,20 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
      */
     protected $entity;
 
-    public function __construct()
+    /**
+     * @var Illuminate\Http\Request
+     */
+    protected $request;
+
+
+    public function __construct(Request $request)
     {
         $this->entity = $this->resolveEntity();
+        $this->request = $request;
     }
 
     /**
-     * @return mixed
+     * @return Illuminate\Support\Collection
      */
     public function all()
     {
@@ -29,7 +38,7 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
 
     /**
      * @param $id
-     * @return mixed
+     * @return Illuminate\Database\Eloquent\Model|ModelNotFoundException
      */
     public function find($id)
     {
@@ -48,7 +57,7 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
     /**
      * @param $column
      * @param $value
-     * @return mixed
+     * @return Illuminate\Support\Collection
      */
     public function findWhere($column, $value)
     {
@@ -58,7 +67,7 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
     /**
      * @param $column
      * @param $value
-     * @return mixed
+     * @return Illuminate\Database\Eloquent\Model|ModelNotFoundException
      */
     public function findWhereFirst($column, $value)
     {
@@ -76,7 +85,7 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
     /**
      * {@inheritdoc}
      */
-    public function findWhereLike($column, $value, $paginate = 0)
+    public function findWhereLike($column, $value)
     {
         $query = $this->entity;
         if (is_array($column)) {
@@ -92,16 +101,41 @@ abstract class AbstractRepository implements RepositoryInterface, CriteriaInterf
         } else {
             $query->where($column, 'like', $value);
         }
-        return $paginate > 0 ? $query->paginate($paginate) : $query->get();
+        return $this->paginateIf($query->get());
     }
 
     /**
-     * @param $perPage
-     * @return mixed
+     * {@inheritdoc}
      */
-    public function paginate($perPage = 10)
+    public function paginate($perPage = 10){
+        $this->request->limit = $perPage;
+        return $this->paginateIf();
+
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function paginateIf($records)
     {
-        return $this->entity->paginate($perPage);
+        $per_page = $this->request->input('limit') > 0 ? $this->request->input('limit') : 0;
+
+        if ($per_page > 0) {
+
+            $page   = $this->request->input('page') > 0 ? $this->request->input('page') : 1;
+            $offset = ($page * $per_page) - $per_page;
+
+            return new LengthAwarePaginator(
+                array_slice($records->toArray(), $offset, $per_page, true),
+                count($records),
+                $per_page,
+                $page,
+                ['path' => $this->request->url(), 'query' => $this->request->query()]
+            );
+        } else {
+
+            return $records;
+        }
     }
 
     /**
